@@ -1,5 +1,4 @@
-# Google Data-Analytics Capstone: Cyclistic Case Study
-[Course]()
+# Google Data Analytics Capstone: Cyclistic Case Study
 
 ## About the company
 
@@ -29,17 +28,18 @@ The business task is to develop marketing strategies that convert existing casua
 
 ## Data
 
-In an Amazon Web Server (AWS), Cyclistic stores the data in zipped comma-separated values (CSV) files. For the years 2020-2023, Cyclistic split the data by months. However, for 2014-2020, the company separately split the data by quarters. The data is collected by sensors on the docking stations.
+In an Amazon Web Server (AWS), Cyclistic stores the data in zipped comma-separated values (CSV) files. For the years 2020-2023, Cyclistic split the data by months. Prior to 2020, Cyclistic split the data by yearly quarters. The company updates the data once a month.
 
-
-In this case study, I’m focusing on the recent monthly data, specifically from January 2022 - December 2022. The data is original, current, and cited because I am working with first-party data from 2014 – 2023. The data is anonymized, and because each observation contains a unique identifier, the data doesn’t warrant additional data processing to preserve customer privacy. Furthermore, though the data is reliable and comprehensive, the data is partially incomplete for 22.9% of trips, specifically for the attribute data of the stations. 
+In this case study, I’m focusing on the recent monthly data, specifically from January 2022 - December 2022. Since I am working with first-party data from a recent year, the data is original, current, and cited. Furthermore, the data is anonymized since the selection doesn't include personally identifiable information. 
+The data partially satisfies the reliable and comprehensive. The data is partially incomplete for about 22.9% of trips, specifically for the attribute data of the stations.
 
 ## Deliverables
 
 Because of the limitations of the README file, I am attaching the deliverables below.
 
-* [Full report](../blob/main/htmls/case_study.html).
-* [Documentation for data cleaning](../blob/main/htmls/documentation.html).
+* Full report.
+* Documentation, Part I: Data Wrangling.
+* Documentation, Part II: Data Visualization.
 
 ## Discussion
 
@@ -49,7 +49,7 @@ On the other hand, I theorize that casual riders are likelier to participate in 
 
 ## Recommendations
 
-Without a user experience (UX) study, we cannot assess the customer's  preferences and pain points. However, the following recommendations are limited to the assumptions above:
+Without a user experience (UX) study, we cannot assess the customer's preferences and pain points. The following recommendations are limited to the assumptions above:
 
 1. Develop a seasonal marketing strategy aiming at casual riders.
     * Because casual riders are usually interested in summer usage of the Cyclistic bike-share program, the marketing department could develop an appropriate marketing strategy around summer participation.
@@ -57,8 +57,9 @@ Without a user experience (UX) study, we cannot assess the customer's  preferenc
     *  Since patrons may be active in recreational activities with others, Cyclistic could develop a referral program that pairs with the annual membership, with a generous discount for one or both parties. For example, first-time members receive a discounted membership if they apply a referral code during the purchase. Likewise, the associated member could receive a small discount on electric bicycles for the summer.
 2. Partner with local institutions and establishments to sponsor the Cyclistic membership.
     * Through partnerships with local institutions and establishments, annual membership is promoted to employees and students. For example, a first-time subscription discount may be suitable because Cyclistic is developing a strategy to convert existing riders. 
-    * Similar to above, Cyclistic could focus on local establishments and recreational areas, which are popular during the summer. However, instead of advertising around these areas, Cyclistic could partner with their corresponding organizations for the purposes of marketing. 
+    * Similar to above, Cyclistic could focus on local establishments and recreational areas, which are popular during the summer. However, instead of advertising around these areas, Cyclistic could partner with their corresponding organizations for marketing. 
 
 However, there is one recommendation for Cyclistic if the company is interested in structural changes.
-2. Develop a seasonal pass for casual riders during the summer.
+
+3. Develop a seasonal pass for casual riders during the summer.
     * Some demographics are specifically available in the summer, including but not limited to: tourists and student populations. Because of the expected decline in utility for annual memberships, a seasonal pass is a compromise between the options for casual riders and the membership.
