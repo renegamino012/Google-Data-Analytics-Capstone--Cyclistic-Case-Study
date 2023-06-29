@@ -1,0 +1,492 @@
+---
+title: "Documentation, Part I: Data Wrangling"
+author: "Rene Gamino"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_download: true
+    css: style.css
+    theme: readable
+    code-fold: show
+font-size: 12pt
+---
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      fig.width = 8)
+
+knitr::knit_hooks$set(inline = function(x) {
+  if (!is.numeric(x)) {
+    x
+  } else if (x < 1) {
+    scales::percent(x, accuracy = 0.001)
+  }
+  else {
+    prettyNum(round(x, 2), big.mark = ",")    
+  }
+})
+```
+## Introduction
+I am documenting the data wrangling for the [Cyclistic case study](report__case_study.html). However, I documented the data visualization in a [separate document](document__data_visualization.html).
+I used the following packages for the current document. The packages are required and named in their respective chunk.
+```{r libraries, eval = T, echo = F, warning = F}
+library(DT)
+library(here)  # helps locate files and directories
+library(janitor) # helps format and modify data
+library(lubridate)  # helps wrangle date attributes
+library(mice) # helps identify patterns
+library(scales) # convert data values to perceptual properties
+options(tidyverse.quiet = TRUE)
+library(tidyverse)  # helps wrangle data
+```
+## Phase I: Data Structuring
+I downloaded several ZIP files from a Cyclistic's Amazon Web Server (AWS), narrowing on trips during 2022.
+```{r read_csv__monthly_data, eval = FALSE}
+setwd("..")
+month_2022_01 <- readr::read_csv(here("data-raw", "202201-divvy-tripdata", "202201-divvy-tripdata.csv"))
+month_2022_02 <- readr::read_csv(here("data-raw", "202202-divvy-tripdata", "202202-divvy-tripdata.csv"))
+month_2022_03 <- readr::read_csv(here("data-raw", "202203-divvy-tripdata", "202203-divvy-tripdata.csv"))
+month_2022_04 <- readr::read_csv(here("data-raw", "202204-divvy-tripdata", "202204-divvy-tripdata.csv"))
+month_2022_05 <- readr::read_csv(here("data-raw", "202205-divvy-tripdata", "202205-divvy-tripdata.csv"))
+month_2022_06 <- readr::read_csv(here("data-raw", "202206-divvy-tripdata", "202206-divvy-tripdata.csv"))
+month_2022_07 <- readr::read_csv(here("data-raw", "202207-divvy-tripdata", "202207-divvy-tripdata.csv"))
+month_2022_08 <- readr::read_csv(here("data-raw", "202208-divvy-tripdata", "202208-divvy-tripdata.csv"))
+month_2022_09 <- readr::read_csv(here("data-raw", "202209-divvy-tripdata", "202209-divvy-publictripdata.csv"))
+month_2022_10 <- readr::read_csv(here("data-raw", "202210-divvy-tripdata", "202210-divvy-tripdata.csv"))
+month_2022_11 <- readr::read_csv(here("data-raw", "202211-divvy-tripdata", "202211-divvy-tripdata.csv"))
+month_2022_12 <- readr::read_csv(here("data-raw", "202212-divvy-tripdata", "202212-divvy-tripdata.csv"))
+```
+### Monthly Data
+For a data merge, column names and their datatypes should match. I briefly investigated for differences with the function `compare_df_cols` from the `janitor` package.
+However, I determined that there are no differences between the columns except in its dimensions - and they are prepared for a merge.
+```{r wrangle_data__colnames, eval = FALSE}
+months__2022 <- list(
+  month_2022_01,
+  month_2022_02,
+  month_2022_03,
+  month_2022_04,
+  month_2022_05,
+  month_2022_06,
+  month_2022_07,
+  month_2022_08,
+  month_2022_09,
+  month_2022_10,
+  month_2022_11,
+  month_2022_12)
+
+janitor::compare_df_cols(months__2022) %>%
+  dplyr::rename(
+    Jan = months__2022_1,
+    Feb = months__2022_2,
+    Mar = months__2022_3,
+    Apr = months__2022_4,
+    May = months__2022_5,
+    Jun = months__2022_6,
+    Jul = months__2022_7,
+    Aug = months__2022_8,
+    Sep = months__2022_9,
+    Oct = months__2022_10,
+    Nov = months__2022_11,
+    Dec = months__2022_12
+  )
+```
+Afterward, I combined these twelve datasets into the first version of the dataset: `all_trips`.
+```{r wraggle_data__rbind, eval = FALSE}
+all_trips <- bind_rows(
+  month_2022_01, 
+  month_2022_02,
+  month_2022_03,
+  month_2022_04,
+  month_2022_05,
+  month_2022_06,
+  month_2022_07,
+  month_2022_08,
+  month_2022_09,
+  month_2022_10,
+  month_2022_11,
+  month_2022_12)
+
+write.csv(all_trips, 
+          here("data", "all_trips_v1.csv"), 
+          row.names = FALSE)
+```
+```{r read__all_trips_v1, include = FALSE}
+all_trips <- read_csv(here("data", "all_trips_v1.csv"))
+curr_nrow <- nrow(all_trips)
+```
+The resulting dataset is large, composed of `r curr_nrow` trips with `r ncol(all_trips)` columns.
+```{r}
+nrow(all_trips[!complete.cases(all_trips), ])/nrow(all_trips)
+```
+
+## Phase II: Data Wrangling
+I secured data integrity by first identifying duplicate values, missing values, data entry errors, and outliers. By assessing trends and patterns, I am tailoring a remedy (e.g., data imputation, dropping rows) for each individual problem.
+
+### Duplicates
+There are no complete duplicate rows.
+```{r duplicates__complete, eval = F}
+all_trips %>% 
+  janitor::get_dupes()
+```
+Instead, there are partial duplicates: instances where the records are identical except for the primary key.
+```{r duplicates__partial}
+duplicates <- all_trips %>% 
+  janitor::get_dupes(-ride_id)
+DT::datatable(duplicates, options = list(scrollX = TRUE))
+```
+There are `r nrow(duplicates)` partial duplicates. Data duplication is a serious concern but the standard response is usually straightforward: dropping.
+
+Since the table organizes the partial duplicates as pairs (e.g., the trips `750336F236CD193A` and `2B9D085EE1667FEA` share  values), I de-duplicated the data by dropping an instance from the pair. 
+```{r duplicates__removed}
+# Retrieves partial duplicates
+duplicates__vals <- as.list(duplicates[seq(1, nrow(duplicates), 2), "ride_id"])$ride_id
+
+# De-Duplication
+all_trips <- all_trips %>%
+  dplyr::filter(!ride_id %in% duplicates__vals)
+```
+Currently, the dataset contains `r curr_nrow`. This is a reduction of the trips by `r curr_nrow - nrow(all_trips)` trips.
+```{r check__round_2, include = FALSE}
+curr_nrow <- nrow(all_trips)
+```
+
+### Missing Values
+
+First, I needed to understand the proportion of missing values across the columns because it supports the strategies to deal with them.
+
+The following columns contain missing values: `end_station_id`, `end_station_name`, `start_station_id`, `start_station_id`, `end_lat`, and `end_lng`.
+```{r missing_vals__across_columns__round_1}
+missing_values__cols <- as.data.frame(colSums(is.na(all_trips))) %>%
+  dplyr::rename(Count = 'colSums(is.na(all_trips))') %>%
+  dplyr::mutate(Percentage = paste0(round(Count/nrow(all_trips), 4) * 100, '%')) %>%
+  dplyr::arrange(desc(Count)) %>%
+  dplyr::filter(Count > 0) 
+
+write.csv(missing_values__cols, here("output","figures", "missing_values_by_columns.csv"), row.names = FALSE)
+
+DT::datatable(missing_values__cols, options = list(scrollX = TRUE))
+```
+#### Null Stations
+All trips contain several attributes of the start and terminal stations: the station's name, the identification number, and geographic coordinates. 
+
+Because I need to reference the name of the stations, I could use the additional attributes to perform data imputation. As a result, I removed the trips that fully lack station information.
+```{r remove__no_stations}
+all_trips <- all_trips %>% dplyr::filter(
+  !((is.na(end_station_name) & is.na(end_station_id) & is.na(end_lat) & is.na(end_lng)) |
+    (is.na(start_station_name) & is.na(start_station_id) & is.na(start_lat) & is.na(start_lng))))
+```
+Currently, the dataset contains `r curr_nrow`. This is a reduction of the trips by `r curr_nrow - nrow(all_trips)` trips.
+```{r check__round_3, include = FALSE}
+curr_nrow <- nrow(all_trips)
+```
+
+With the first round of data cleaning, I identified that the two columns no longer contain missing values - and that four columns still contain missing values.
+
+```{r missing_vals__across_columns__round_2}
+missing_values__cols <- as.data.frame(colSums(is.na(all_trips))) %>%
+  dplyr::rename(Count = 'colSums(is.na(all_trips))') %>%
+  dplyr::mutate(Percentage = paste0(round(Count/nrow(all_trips), 4) * 100, '%')) %>%
+  dplyr::arrange(desc(Count)) %>%
+  dplyr::filter(Count > 0) 
+
+write.csv(missing_values__cols, here("output",
+                   "figures",
+                   "missing_values__round_2.csv"), row.names = FALSE)
+
+DT::datatable(missing_values__cols, options = list(scrollX = TRUE))
+```
+
+#### Stations Without Names
+
+Entries with missing values only exist in combinations of the stations' attributes. For example, there is 427,448 entries with missing values in the fields: `start_station_name` and `end_station_name`. 
+```{r missing_vals__combs}
+missing_values__combs <- as.data.frame(mice::md.pairs(all_trips)$mm) %>%
+  select(start_station_name, start_station_id, end_station_name, end_station_id)
+
+missing_values__combs <- missing_values__combs %>%
+  filter(row.names(missing_values__combs) %in% c(
+    "start_station_name", "start_station_id", "end_station_name", "end_station_id"))
+
+DT::datatable(missing_values__combs, options = list(scrollX = TRUE))
+```
+However, whenever one column (e.g., `start_station_name`) doesn't contain a value, the corresponding column (e.g., `start_station_id`) doesn't contain a value. 
+
+In start stations, there are `r nrow(all_trips %>% filter(is.na(start_station_name) & !is.na(start_station_id)))` trips with an absent station name and a present identification number. Similarly, in terminal stations, there are `r nrow(all_trips %>% filter(is.na(end_station_name) & !is.na(end_station_id)))` trips with an absent station name and a present identification number.
+
+In a separate chunk, I investigated the opportunity to train a machine learning model to classify unnamed stations. However, there is geographic variation between and within the stations. In this situation, data imputation requires machine learning to classify unnamed stations. However, there is a degree of risk because of the bias–variance dilemma. 
+
+In the meantime, I am removing these observations to minimize problems in data integrity.
+
+```{r remove__stations_name}
+# Removing trips without stations' attributes
+all_trips <- all_trips %>%
+  dplyr::filter(
+    !is.na(start_station_name) &
+      !is.na(end_station_name)
+  )
+DT::datatable(head(all_trips), options = list(scrollX = TRUE))
+```
+
+By dropping the rows above, I have finished optimizing for data completeness.
+```{r missing_vals__across_columns__round_3}
+missing_values__cols <- as.data.frame(colSums(is.na(all_trips))) %>%
+  dplyr::rename(Count = 'colSums(is.na(all_trips))') %>%
+  dplyr::mutate(Percentage = paste0(round(Count/nrow(all_trips), 4) * 100, '%')) %>%
+  dplyr::arrange(desc(Count)) %>%
+  dplyr::filter(Count > 0) 
+
+write.csv(missing_values__cols, here("output",
+                   "figures",
+                   "missing_values__round_3.csv"), row.names = FALSE)
+
+DT::datatable(missing_values__cols, options = list(scrollX = TRUE))
+```
+Currently, the dataset contains `r nrow(all_trips)`. This is a reduction of the trips by `r curr_nrow - nrow(all_trips)` trips.
+```{r check__round_4, include = FALSE}
+curr_nrow <- nrow(all_trips)
+```
+### Data Entry Errors and Outliers
+#### Rideable Type
+The `rideable_type` field should contain two options: `classic_bike` and `electric_bike`. I dropped the trips where the `rideable_type` is classified as `docked_bike`.
+```{r data_entry_errors__rideable_type}
+all_trips %>%
+  dplyr::count(rideable_type)
+
+all_trips <- all_trips %>%
+  dplyr::filter(rideable_type != "docked_bike")
+```
+Currently, the dataset contains `r nrow(all_trips)`. This is a reduction of the trips by `r curr_nrow - nrow(all_trips)` trips.
+```{r check__round_5, include = FALSE}
+curr_nrow <- nrow(all_trips)
+```
+#### Started At
+There doesn't appear to be data entry errors with the `started_at` column.
+```{r data_entry_errors__started_at}
+all_trips %>%
+  dplyr::filter(started_at < as.POSIXct("2021-12-31") | 
+           started_at > as.POSIXct("2023-01-01"))
+all_trips %>%
+  dplyr::filter(ended_at < as.POSIXct("2021-12-31") | 
+           ended_at > as.POSIXct("2023-01-02"))
+```
+#### Station Names
+There doesn't appear to be data entry errors with the `start_station_name` and `end_station_name` columns.
+```{r data_entry_errors__station_name}
+all_trips %>%
+  dplyr::count(start_station_name)
+all_trips %>%
+  dplyr::count(end_station_name)
+```
+#### Coordinates
+There are indicators that the geographic coordinates for stations may contain data entry errors, namely the appearance of zero values for the terminal stations' coordinates.
+
+##### Start Station's Latitude
+```{r data_entry_errors__summary__start_lat}
+summary(all_trips$start_lat)
+```
+##### Start Station's Longitude
+```{r data_entry_errors__summary__start_lng}
+summary(all_trips$start_lng)
+```
+##### Terminal Station's Latitude
+```{r data_entry_errors__summary__end_lat}
+summary(all_trips$end_lat)
+```
+##### Terminal Station's Longitude
+```{r data_entry_errors__summary__end_lng}
+summary(all_trips$end_lng)
+```
+##### Placeholder Values
+I identified that there are a (0, 0) pair of coordinates in all possible pairs in the terminal stations. The placeholder values are limited to the following stations: `Green St & Madison Ave*` with the identification number `chargingstx07`.
+```{r data_entry_errors__coordinates__check}
+DT::datatable(all_trips %>%
+  dplyr::filter(
+    end_lat == 0 |
+      end_lng == 0
+  ) %>%
+  dplyr::select(
+    start_station_name,
+    start_station_id,
+    start_lat,
+    start_lng,
+    end_station_name,
+    end_station_id,
+    end_lat,
+    end_lng,
+  ), options = list(scrollX = TRUE))
+```
+
+Because there are stations with coordinates, I corrected the trips with the data entry errors by replacing the placeholder values with the appropriate coordinates.
+
+```{r data_entry_errors__coordinates__correction_pt1}
+DT::datatable(all_trips %>%
+  dplyr::filter(
+    end_station_name == "Green St & Madison Ave*" & 
+      end_station_id == "chargingstx07"
+  ) %>%
+  dplyr::mutate(end_lat = round(end_lat, 4), 
+         end_lng = round(end_lng, 4)) %>%
+  dplyr::count(
+    end_station_name, 
+    end_lat,
+    end_lng
+  ), options = list(scrollX = TRUE))
+```
+```{r data_entry_errors__coordinates__correction_pt2}
+all_trips$end_lat <- replace(all_trips$end_lat, all_trips$end_lat == 0, 41.8818)
+all_trips$end_lng <- replace(all_trips$end_lng, all_trips$end_lng == 0, -87.6488)
+```
+#### Membership
+```{r data_entry_errors__membership}
+DT::datatable(all_trips %>%
+  dplyr::count(member_casual), options = list(scrollX = TRUE))
+```
+### Interlude: Datetime Columns
+I should add numerous columns of datetime data - such as day, month, year - that provide additional opportunities to aggregate the data. Furthermore, we should add a calculated field for length of ride (in minutes) to understand the customer base and their preferences.
+```{r add__datetime_and_misc}
+# Datetime
+all_trips$date <- as.Date(all_trips$started_at) 
+all_trips$month <- lubridate::month(all_trips$date,
+                                       label = TRUE,
+                                       abbr = TRUE)
+all_trips$day <- format(as.Date(all_trips$date), "%d")
+all_trips$hour <- factor(lubridate::hour(all_trips$date),
+                         levels = as.character(seq(0, 24)))
+all_trips$day_of_week <- format(as.Date(all_trips$date), "%A")
+all_trips$day_of_week <- ordered(all_trips$day_of_week,
+                                 levels = c("Sunday",
+                                            "Monday",
+                                            "Tuesday",
+                                            "Wednesday",
+                                            "Thursday",
+                                            "Friday",
+                                            "Saturday"))
+
+#Ride Length 
+all_trips$ride_length <- difftime(all_trips$ended_at, all_trips$started_at)
+all_trips$ride_length <- as.numeric(all_trips$ride_length)
+all_trips$ride_length <- all_trips$ride_length/60
+```
+
+### Outliers and Other Data Inconsistencies
+#### Ride Length
+There are trips where the duration is negative or exceed the number of minutes in a full day. A shared explanation is that these trips include instances where the staff removes the bike from circulation for quality control testing.
+```{r inconsistencies__ride_length}
+summary(all_trips$ride_length)
+```
+The length of trips is below 91.35 minutes for 99.5% of the data.
+```{r outliers__quantile__prep}
+qtile <- quantile(all_trips$ride_length,
+         seq(0, 1, by = .005))
+
+qnames <- names(qtile)
+qvals <- as.numeric(qtile)
+```
+```{r outliers__quantile__top_five}
+DT::datatable(data.frame(Quantile = qnames, Value = qvals) %>%
+  dplyr::top_n(5), options = list(scrollX = TRUE))
+```
+```{r outliers__quantile__bottom_five}
+DT::datatable(data.frame(Quantile = qnames, Value = qvals) %>%
+  dplyr::top_n(-5), options = list(scrollX = TRUE))
+```
+With the information above, I removed trips that fit several conditions: 
+
+* **Trips where the duration is negative in length.** A user cannot end their trip prior to its start time.
+* **Trips where the duration is less than a minute in length.** These instances are likely false starts, initiated by Cyclistic staff and patrons. 
+* **Trips where the duration is more than six hours in length.** These instances are likely due to quality tests and other circumstances.
+
+```{r inconsistencies__ride_length_correction}
+all_trips <- all_trips %>%
+  dplyr::filter(ride_length >= 1 & ride_length <= 360)
+```
+Currently, the dataset contains `r nrow(all_trips)`. This is a reduction of the trips by `r curr_nrow - nrow(all_trips)` trips.
+```{r check__round_6, include = FALSE}
+curr_nrow <- nrow(all_trips)
+```
+#### Station Names
+Several trips are in the data where staff withdraw the bikes for quality control testing.As a precaution, I searched for staff-only stations by examining their names with keywords in mind.
+```{r inconsistencies__station_names}
+phrases <- c(
+  "repair", "test", "divvy", "warehouse", "wh", "base", "hq"
+)
+```
+```{r inconsistencies__station_names__stn}
+DT::datatable(all_trips %>%
+  dplyr::count(start_station_name) %>%
+  dplyr::filter(grepl(paste(phrases, collapse = "|"),
+               tolower(start_station_name))), options = list(scrollX = TRUE))
+```
+```{r inconsistencies__station_names__sti}
+DT::datatable(all_trips %>%
+  dplyr::count(start_station_id) %>%
+  dplyr::filter(grepl(paste(phrases, collapse = "|"),
+               tolower(start_station_id))), options = list(scrollX = TRUE))
+```
+```{r inconsistencies__station_names__esn}
+DT::datatable(all_trips %>%
+  dplyr::count(end_station_name) %>%
+  dplyr::filter(grepl(paste(phrases, collapse = "|"),
+               tolower(end_station_name))), options = list(scrollX = TRUE))
+```
+```{r inconsistencies__station_names__esi}
+DT::datatable(all_trips %>%
+  dplyr::count(end_station_id) %>%
+  dplyr::filter(grepl(paste(phrases, collapse = "|"),
+               tolower(end_station_id))), options = list(scrollX = TRUE))
+```
+After deliberation, I removed these trips from the data.
+```{r inconsistencies__station_names__correction}
+testing_stations <- c(
+  "Base - 2132 W Hubbard",
+  "Base - 2132 W Hubbard Warehouse",
+  "Hastings WH 2",
+  "Pawel Bialowas - Test- PBSC charging station",
+  "DIVVY CASSETTE REPAIR MOBILE STATION",
+  "Hubbard Bike-checking (LBS-WH-TEST)",
+  "DIVVY 001",
+  "DIVVY 001 - Warehouse test station",
+  "HQ QR"
+)
+
+all_trips_v2 <- all_trips %>%
+  dplyr::filter(!(start_station_name %in% testing_stations | end_station_name %in% testing_stations | start_station_id %in% testing_stations | end_station_id %in% testing_stations))
+```
+Currently, the dataset contains `r nrow(all_trips)`. This is a reduction of the trips by `r curr_nrow - nrow(all_trips)` trips.
+```{r check__round_7, include = FALSE}
+curr_nrow <- nrow(all_trips)
+```
+
+### Data Transformation
+However, I re-factored the columns - `rideable_type` and `member_casual` - based on their respective options.
+```{r transform__rideable_type}
+all_trips <- all_trips %>%
+  dplyr::mutate(
+    rideable_type = factor(
+      rideable_type, 
+      levels = c("electric_bike", "classic_bike")))
+
+all_trips <- all_trips %>%
+  dplyr::mutate(
+    member_casual = factor(
+      member_casual, 
+      levels = c("member", "casual")))
+```
+
+Because the station identification numbers cannot provide insights anymore, I removed the two columns, especially if it means a smaller dataset.
+
+```{r transform__reduction}
+all_trips <- all_trips %>%
+  dplyr::select(-c(start_station_id, end_station_id))
+```
+
+## Conclusion
+After I completed the data wrangling, the trip data contains `r nrow(all_trips)` trips, with `r ncol(all_trips)` columns. There has been a comprehensive reduction of trip data by `r (nrow(read_csv(here("data", "all_trips_v1.csv")))-nrow(all_trips))/nrow(read_csv(here("data", "all_trips_v1.csv")))`.
+
+I completed the data wrangling by exporting as a second version of the dataset.
+```{r data_cleaning__export}
+write.csv(all_trips, here("data", "all_trips_v2.csv"), row.names = FALSE)
+```

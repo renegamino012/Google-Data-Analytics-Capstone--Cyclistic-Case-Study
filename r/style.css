@@ -1,0 +1,22 @@
+
+ /*------------- Whole Document---------------- */
+
+h1 {
+  color: #000;
+}
+
+h2, h3, h4, h5, h6 {
+  color: #121212;
+}
+
+p {
+  color: #222;
+}
+
+a, a:visited {
+  color: #5757ff;
+}
+
+a:hover, a:focus, a:active {
+  color: #277cb4;
+}
